@@ -10,12 +10,13 @@ import os
 import secrets
 import shutil
 import sys
+import re
 import urllib.parse
 from contextlib import contextmanager
 from typing import Tuple, Optional
 
 import gitlab
-from git import Repo
+from git import Repo, GitCommandError
 
 GITLAB_URL = os.environ.get("GITLAB_URL", default="https://gitlab.com")
 GITLAB_USERNAME = os.environ.get("GITLAB_USERNAME")
@@ -77,46 +78,62 @@ def backup_repo(source, project_name, group_name=None):
     if not (isinstance(group_name, str) and group_name.strip()):
         group_name = None
 
-    with create_temp_dir() as workdir:
-        repo = Repo.clone_from(source, workdir, multi_options=["--bare"])
-        destination = construct_gitlab_remote_url(project_name, group_name=group_name)
-        remote = repo.create_remote(
-            BACKUP_REMOTE,
-            destination,
-        )
+    try:
+        with create_temp_dir() as workdir:
+            repo = Repo.clone_from(source, workdir, multi_options=["--bare"])
+            destination = construct_gitlab_remote_url(
+                project_name, group_name=group_name
+            )
+            remote = repo.create_remote(
+                BACKUP_REMOTE,
+                destination,
+            )
 
-        get_or_create_project(project_name, group_name=group_name)
-        remote.push(mirror=True)
-        LOGGER.info("Backed up %s to %s", source, destination)
+            get_or_create_project(project_name, group_name=group_name)
+            remote.push(mirror=True)
+            LOGGER.info("Backed up %s to %s", source, destination)
+    except GitCommandError as e:
+        exit_with_error(e.stderr, -2)
 
 
 GIT_SSH = "git@"
 GIT_HTTP = "http"
 
 
+def clean_name(s):
+    """Trim trailing (.git) and slash from the name"""
+    return re.sub(r"(.git)?/?$", "", s)
+
+
 def get_project_name_and_group(source) -> Tuple[Optional[str], Optional[str]]:
     """
     Infer project name and group from source git URL (if possible)
+
+    source can be git@.., http(s)://, or a local repository
     """
 
     # warning: brittle
     try:
         if source.startswith(GIT_SSH):
+            # sample: git@remote.com:group/project.git
             group, project = os.path.split(source.split(":")[-1])
         elif source.startswith(GIT_HTTP):
+            # sample: https://remote.com/group/project.git
             parsed = urllib.parse.urlparse(source)
             group, project = os.path.split(parsed.path)
+        elif os.stat(source) and os.path.isdir(source):
+            # sample: /home/user/repo/
+            group, project = None, os.path.basename(source)
         else:
             group, project = None, None
-    except (ValueError, IndexError) as e:
-        LOGGER.warning("gxg: %s", e)
+    except (ValueError, IndexError, FileNotFoundError) as e:
         group, project = None, None
 
     if isinstance(group, str) and group.strip():
-        group = group.replace("/", "")
+        group = group.strip("/")
 
     if isinstance(project, str) and project.strip():
-        project = project.replace(".git", "")
+        project = clean_name(project)
 
     return project, group
 
@@ -135,7 +152,9 @@ def main(source, project_name=None, group_name=None):
         group_name = inferred_group
 
     if not project_name:
-        exit_with_error("Project name could not be inferred, please pass manually")
+        exit_with_error(
+            f"Project name could not be inferred, please pass manually ({source})"
+        )
 
     backup_repo(source, project_name, group_name=group_name)
 
