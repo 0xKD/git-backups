@@ -12,6 +12,7 @@ import urllib.parse
 
 import gitlab
 from git import Repo, GitCommandError
+from gitlab.v4.objects import Project
 
 from git_backups import utils
 
@@ -25,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def construct_gitlab_remote_url(project_name, group_name=None) -> str:
-    if not (isinstance(group_name, str) and group_name.strip()):
+    if utils.is_empty(group_name):
         group_name = GITLAB_USERNAME
 
     parsed = urllib.parse.urlparse(GITLAB_URL)
@@ -52,7 +53,7 @@ def get_or_create_group(group_name):
 
 
 def get_or_create_project(project_name, group_name=None):
-    if isinstance(group_name, str) and group_name.strip():
+    if not utils.is_empty(group_name):
         group = get_or_create_group(group_name)
     else:
         group = None
@@ -67,6 +68,13 @@ def get_or_create_project(project_name, group_name=None):
         )
 
 
+def project_is_empty(project: Project) -> bool:
+    try:
+        return next(project.commits.list(per_page=1, as_list=False)) is None
+    except StopIteration:
+        return True
+
+
 def backup_repo(source, project_name, group_name: str = None, overwrite=False):
     """
     Backup a git repo (source) to destination (project_name) on GitLab.
@@ -77,6 +85,13 @@ def backup_repo(source, project_name, group_name: str = None, overwrite=False):
 
     try:
         with tempfile.TemporaryDirectory() as workdir:
+            project = get_or_create_project(project_name, group_name=group_name)
+            if not overwrite and not project_is_empty(project):
+                LOGGER.error(
+                    "Project (%s) already exists, skipping %s", project.name, source
+                )
+                return exit_with_error(-3)
+
             repo = Repo.clone_from(source, workdir, multi_options=["--bare"])
             destination = construct_gitlab_remote_url(
                 project_name, group_name=group_name
@@ -86,12 +101,11 @@ def backup_repo(source, project_name, group_name: str = None, overwrite=False):
                 destination,
             )
 
-            get_or_create_project(project_name, group_name=group_name)
             remote.push(mirror=True)
             LOGGER.info("Backed up %s to %s", source, destination)
     except GitCommandError as e:
         LOGGER.error(e.stderr)
-        exit_with_error(-2)
+        return exit_with_error(-2)
 
 
 def exit_with_error(code=-1):
@@ -116,6 +130,8 @@ def main():
         "-f",
         "--force",
         default=False,
+        dest="overwrite",
+        action="store_true",
         help=(
             "Overwrite existing project data on the target Gitlab instance"
             " (will not overwrite by default)"
@@ -133,7 +149,12 @@ def main():
         )
         return exit_with_error()
 
-    backup_repo(options.source, project_name, group_name=group_name)
+    backup_repo(
+        options.source,
+        project_name,
+        group_name=group_name,
+        overwrite=options.overwrite,
+    )
 
 
 if __name__ == "__main__":
