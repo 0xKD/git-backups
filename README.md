@@ -14,7 +14,7 @@ Then run
 
 ```shell
 source .env
-python src/main.py git@github.com:jazzband/django-robots.git
+git_backups git@github.com:jazzband/django-robots.git
 ```
 
 This will create a project `django-robots` under the `jazzband` group on the target Gitlab instance.
@@ -33,3 +33,9 @@ optional arguments:
                         Name of the destination Gitlab project. Will be inferred from
   --group GROUP_NAME    Group under which the destination project will be categorised (optional)
 ```
+
+---
+
+#### Credits
+
+This package was created with [Cookiecutter](https://github.com/audreyr/cookiecutter) and the [`audreyr/cookiecutter-pypackage`](https://github.com/audreyr/cookiecutter-pypackage) project template.
