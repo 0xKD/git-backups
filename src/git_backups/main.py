@@ -37,7 +37,7 @@ def construct_gitlab_remote_url(project_name, group_name=None) -> str:
     return new.geturl()  # noqa: pycharm thinks it is bytes
 
 
-@functools.lru_cache
+@functools.lru_cache(maxsize=64)
 def _gitlab():
     return gitlab.Gitlab(url=GITLAB_URL, private_token=GITLAB_PRIVATE_TOKEN)
 

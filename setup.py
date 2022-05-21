@@ -16,7 +16,7 @@ except IOError:
 requirements = []
 
 test_requirements = [
-    "pytest>=7,pytest<8",
+    "pytest>=7",
 ]
 
 setup(

@@ -1,3 +1,5 @@
+![status](https://github.com/0xKD/git-backups/actions/workflows/test.yml/badge.svg)
+
 Script to back up a git repo to a Gitlab instance.
 
 #### Usage:
@@ -14,7 +16,7 @@ Then run
 
 ```shell
 source .env
-git_backups git@github.com:jazzband/django-robots.git
+gitbak git@github.com:jazzband/django-robots.git
 ```
 
 This will create a project `django-robots` under the `jazzband` group on the target Gitlab instance.
