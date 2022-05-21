@@ -13,7 +13,8 @@ try:
 except IOError:
     history = ""
 
-requirements = []
+with open("requirements.txt") as requirements_file:
+    requirements = requirements_file.read()
 
 test_requirements = [
     "pytest>=7",
@@ -46,8 +47,8 @@ setup(
     include_package_data=True,
     keywords="git_backups",
     name="git_backups",
-    packages=find_packages(include=["src/git_backups", "src/git_backups.*"]),
-    package_dir={"": "src/git_backups"},
+    packages=find_packages(include=["git_backups", "git_backups.*"]),
+    package_dir={"": "src"},
     test_suite="tests",
     tests_require=test_requirements,
     url="https://github.com/0xKD/gitbackups",
