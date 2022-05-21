@@ -3,20 +3,17 @@ Backup git repos to a GitLab instance.
 """
 
 import argparse
-import contextlib
 import functools
 import logging
 import os
-import secrets
-import shutil
 import sys
-import re
+import tempfile
 import urllib.parse
-from contextlib import contextmanager
-from typing import Tuple, Optional
 
 import gitlab
 from git import Repo, GitCommandError
+
+from git_backups import utils
 
 GITLAB_URL = os.environ.get("GITLAB_URL", default="https://gitlab.com")
 GITLAB_USERNAME = os.environ.get("GITLAB_USERNAME")
@@ -70,16 +67,16 @@ def get_or_create_project(project_name, group_name=None):
         )
 
 
-def backup_repo(source, project_name, group_name=None):
+def backup_repo(source, project_name, group_name: str = None, overwrite=False):
     """
     Backup a git repo (source) to destination (project_name) on GitLab.
     """
 
-    if not (isinstance(group_name, str) and group_name.strip()):
+    if utils.is_empty(group_name):
         group_name = None
 
     try:
-        with create_temp_dir() as workdir:
+        with tempfile.TemporaryDirectory() as workdir:
             repo = Repo.clone_from(source, workdir, multi_options=["--bare"])
             destination = construct_gitlab_remote_url(
                 project_name, group_name=group_name
@@ -93,87 +90,15 @@ def backup_repo(source, project_name, group_name=None):
             remote.push(mirror=True)
             LOGGER.info("Backed up %s to %s", source, destination)
     except GitCommandError as e:
-        exit_with_error(e.stderr, -2)
+        LOGGER.error(e.stderr)
+        exit_with_error(-2)
 
 
-GIT_SSH = "git@"
-GIT_HTTP = "http"
-
-
-def clean_name(s):
-    """Trim trailing (.git) and slash from the name"""
-    return re.sub(r"(.git)?/?$", "", s)
-
-
-def get_project_name_and_group(source) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Infer project name and group from source git URL (if possible)
-
-    source can be git@.., http(s)://, or a local repository
-    """
-
-    # warning: brittle
-    try:
-        if source.startswith(GIT_SSH):
-            # sample: git@remote.com:group/project.git
-            group, project = os.path.split(source.split(":")[-1])
-        elif source.startswith(GIT_HTTP):
-            # sample: https://remote.com/group/project.git
-            parsed = urllib.parse.urlparse(source)
-            group, project = os.path.split(parsed.path)
-        elif os.stat(source) and os.path.isdir(source):
-            # sample: /home/user/repo/
-            group, project = None, os.path.basename(source)
-        else:
-            group, project = None, None
-    except (ValueError, IndexError, FileNotFoundError) as e:
-        group, project = None, None
-
-    if isinstance(group, str) and group.strip():
-        group = group.strip("/")
-
-    if isinstance(project, str) and project.strip():
-        project = clean_name(project)
-
-    return project, group
-
-
-def exit_with_error(message, code=-1):
-    sys.stderr.write(message + "\n")
+def exit_with_error(code=-1):
     sys.exit(code)
 
 
-def main(source, project_name=None, group_name=None):
-    inferred_project, inferred_group = get_project_name_and_group(source)
-    if not project_name:
-        project_name = inferred_project
-
-    if not group_name:
-        group_name = inferred_group
-
-    if not project_name:
-        exit_with_error(
-            f"Project name could not be inferred, please pass manually ({source})"
-        )
-
-    backup_repo(source, project_name, group_name=group_name)
-
-
-@contextmanager
-def create_temp_dir():
-    temp_folder = secrets.token_hex(8)
-    destination = os.path.join("/tmp", temp_folder)
-
-    try:
-        os.mkdir(destination)
-        yield destination
-    finally:
-        with contextlib.suppress(OSError):
-            shutil.rmtree(destination)
-
-
-# todo: add force flag (default=False) that checks if repo exists and has content
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("source", help="Git repository URL")
     parser.add_argument(
@@ -187,9 +112,29 @@ if __name__ == "__main__":
         default=None,
         help="Group under which the destination project will be categorised (optional)",
     )
-    options = parser.parse_args()
-    main(
-        options.source,
-        project_name=options.project_name,
-        group_name=options.group_name,
+    parser.add_argument(
+        "-f",
+        "--force",
+        default=False,
+        help=(
+            "Overwrite existing project data on the target Gitlab instance"
+            " (will not overwrite by default)"
+        ),
     )
+    options = parser.parse_args()
+
+    inferred_project, inferred_group = utils.get_project_name_and_group(options.source)
+    project_name = options.project_name or inferred_project
+    group_name = options.group_name or inferred_group
+    if not project_name:
+        LOGGER.error(
+            "Project name could not be inferred, please pass manually (%s)",
+            options.source,
+        )
+        return exit_with_error()
+
+    backup_repo(options.source, project_name, group_name=group_name)
+
+
+if __name__ == "__main__":
+    main()
