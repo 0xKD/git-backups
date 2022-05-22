@@ -114,19 +114,31 @@ def exit_with_error(code=-1):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("source", help="Git repository URL")
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="subcommand")
+
+    # gitbak src (add, remove)
+    source_parser = sub.add_parser("source", aliases=["src"], help="Manage sources")
+    source_sub = source_parser.add_subparsers(dest="source_action")
+    source_add = source_sub.add_parser("add", help="Add git source to config")
+    source_add.add_argument("source", help="Git repository URL")
+    source_remove = source_sub.add_parser("remove", help="Remove git source to config")
+    source_remove.add_argument("source", help="Git repository URL")
+
+    # gitbak sync
+    sync_parser = sub.add_parser("sync", help="Backup repository")
+    sync_parser.add_argument("source", help="Git repository URL")
+    sync_parser.add_argument(
         "--project",
         dest="project_name",
         help="Name of the destination Gitlab project. Will be inferred from ",
     )
-    parser.add_argument(
+    sync_parser.add_argument(
         "--group",
         dest="group_name",
         default=None,
         help="Group under which the destination project will be categorised (optional)",
     )
-    parser.add_argument(
+    sync_parser.add_argument(
         "-f",
         "--force",
         default=False,
@@ -137,6 +149,7 @@ def main():
             " (will not overwrite by default)"
         ),
     )
+
     options = parser.parse_args()
 
     inferred_project, inferred_group = utils.get_project_name_and_group(options.source)
