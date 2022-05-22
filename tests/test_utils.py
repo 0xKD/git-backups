@@ -4,7 +4,7 @@ import pytest as pytest
 
 from git_backups.utils import get_project_name_and_group
 
-FORMATS: Tuple[str, ...] = (
+GIT_SOURCES: Tuple[str, ...] = (
     "ssh://user@host.xz:port/path/to/repo.git",
     "ssh://user@host.xz/path/to/repo.git",
     "ssh://host.xz:port/path/to/repo.git",
@@ -34,14 +34,14 @@ FORMATS: Tuple[str, ...] = (
     "file:///path/to/repo",
     "file://~/path/to/repo.git",
 )
-NO_PROJECT = [_.replace("path/to/", "") for _ in FORMATS]
+NO_GROUP = [_.replace("path/to/", "") for _ in GIT_SOURCES]
 
 
-@pytest.mark.parametrize("source", FORMATS)
-def test_name_parser(source: str):
+@pytest.mark.parametrize("source", GIT_SOURCES)
+def test_source_parser(source: str):
     assert get_project_name_and_group(source) == ("repo", "to")
 
 
-@pytest.mark.parametrize("source", NO_PROJECT)
-def test_name_empty(source: str):
+@pytest.mark.parametrize("source", NO_GROUP)
+def test_source_parser_empty_group(source: str):
     assert get_project_name_and_group(source) == ("repo", None)
