@@ -43,7 +43,9 @@ def validate_project_name(s: str) -> bool:
     True
     """
     return (
-        re.fullmatch(r"[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*", s)
+        re.fullmatch(
+            r"[a-zA-Z0-9]+([._-][a-zA-Z0-9]+)*(/[a-zA-Z0-9]+([._-][a-zA-Z0-9]+)*)*", s
+        )
         is not None
     )
 

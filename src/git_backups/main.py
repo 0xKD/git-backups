@@ -16,7 +16,7 @@ from git import Repo, GitCommandError
 from gitlab.v4.objects import Project
 
 from git_backups import utils
-from git_backups.github import fetch_starred_repositories
+from git_backups.github import fetch_starred_repositories, fetch_user_repositories
 
 try:
     from tqdm import tqdm
@@ -140,8 +140,8 @@ def is_recently_backed_up(group_name, project_name, days=7):
 
 
 def copy_github(token):
-    starred_repos = fetch_starred_repositories(token, limit=10)
-    for repo in starred_repos:
+    starred_repos = fetch_user_repositories(token, limit=100)
+    for repo in tqdm(starred_repos):
         project_name, group_name = utils.get_project_name_and_group(repo)
         if not project_name:
             LOGGER.error(
