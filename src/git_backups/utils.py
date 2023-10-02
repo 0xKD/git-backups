@@ -39,7 +39,7 @@ def validate_project_name(s: str) -> bool:
 
     >>> validate_project_name("basic(b)")
     False
-    >>> validate_project_name("foobar+")
+    >>> validate_project_name("foo.bar")
     True
     """
     return (
