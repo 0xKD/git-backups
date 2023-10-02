@@ -29,7 +29,7 @@ def validate_group_name(s: str) -> bool:
     >>> validate_group_name("basic(b)")
     True
     """
-    return re.fullmatch(r"[\w][\w\-.() ]*", s) is not None
+    return re.fullmatch(r"\w[\w\-.() ]*", s) is not None
 
 
 def validate_project_name(s: str) -> bool:
@@ -42,7 +42,10 @@ def validate_project_name(s: str) -> bool:
     >>> validate_project_name("foobar+")
     True
     """
-    return re.fullmatch(r"[\w][\w\-.+ ]*", s) is not None
+    return (
+        re.fullmatch(r"[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*", s)
+        is not None
+    )
 
 
 def get_project_name_and_group(source) -> Tuple[Optional[str], Optional[str]]:

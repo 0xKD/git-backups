@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import urllib.parse
+from datetime import datetime, timedelta
 
 import gitlab
 from git import Repo, GitCommandError
@@ -124,12 +125,32 @@ def exit_with_error(code=-1):
     sys.exit(code)
 
 
+def is_recently_backed_up(group_name, project_name, days=7):
+    gl = _gitlab()
+    try:
+        project = gl.projects.get(f"{group_name}/{project_name}")
+        updated_at = datetime.strptime(
+            project.attributes["last_activity_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+        )
+        if datetime.utcnow() - updated_at <= timedelta(days=days):
+            return True
+    except gitlab.exceptions.GitlabGetError:
+        # If project is not found, it hasn't been backed up yet
+        pass
+
+
 def copy_github(token):
     starred_repos = fetch_starred_repositories(token, limit=10)
     for repo in starred_repos:
         project_name, group_name = utils.get_project_name_and_group(repo)
         if not project_name:
-            LOGGER.error(f"Project name could not be inferred, skipping ({repo})")
+            LOGGER.error(
+                f"Project name invalid/could not be inferred, skipping ({repo})"
+            )
+            continue
+
+        if is_recently_backed_up(group_name, project_name):
+            LOGGER.warning(f"{repo} was backed up recently, skipping")
             continue
 
         LOGGER.info("Backing up %s", repo)
