@@ -15,14 +15,26 @@ from git import Repo, GitCommandError
 from gitlab.v4.objects import Project
 
 from git_backups import utils
+from git_backups.github import fetch_starred_repositories
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    # dummy
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
+
 
 GITLAB_URL = os.environ.get("GITLAB_URL", default="https://gitlab.com")
 GITLAB_USERNAME = os.environ.get("GITLAB_USERNAME")
 GITLAB_PRIVATE_TOKEN = os.environ.get("GITLAB_PRIVATE_TOKEN")
 BACKUP_REMOTE = "backup"
 
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.INFO)
 
 
 def construct_gitlab_remote_url(project_name, group_name=None) -> str:
@@ -112,9 +124,27 @@ def exit_with_error(code=-1):
     sys.exit(code)
 
 
+def copy_github(token):
+    starred_repos = fetch_starred_repositories(token, limit=10)
+    for repo in starred_repos:
+        project_name, group_name = utils.get_project_name_and_group(repo)
+        if not project_name:
+            LOGGER.error(f"Project name could not be inferred, skipping ({repo})")
+            continue
+
+        LOGGER.info("Backing up %s", repo)
+        backup_repo(repo, project_name, group_name=group_name)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("source", help="Git repository URL")
+    parser.add_argument("-s", "--source", dest="source", help="Git repository URL")
+    parser.add_argument(
+        "--copy-github",
+        dest="copy_github",
+        action="store_true",
+        help="Clone GitHub starred repos",
+    )
     parser.add_argument(
         "--project",
         dest="project_name",
@@ -138,6 +168,10 @@ def main():
         ),
     )
     options = parser.parse_args()
+
+    if options.copy_github:
+        copy_github(GITHUB_TOKEN)
+        return
 
     inferred_project, inferred_group = utils.get_project_name_and_group(options.source)
     project_name = options.project_name or inferred_project

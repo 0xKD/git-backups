@@ -40,6 +40,7 @@ setup(
             "gitbak=git_backups.main:main",
         ],
     },
+    extras_require={"tqdm": ["tqdm"]},
     install_requires=requirements,
     license="MIT license",
     long_description=readme + "\n\n" + history,
